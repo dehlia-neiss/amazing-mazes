@@ -1,6 +1,5 @@
-# solver.py
-
 import heapq
+import time   # <-- ajouté
 
 # ===================== BACKTRACKING =====================
 def solve_backtracking(maze, start=(1,0), end=None):
@@ -15,8 +14,12 @@ def solve_backtracking(maze, start=(1,0), end=None):
         if (x, y) == end:
             path.append((x,y))
             return True
-        if (x,y) in visited or maze[x][y] == 1:
+        if (x,y) in visited or maze[x][y] in [1, "#"]:
             return False
+        
+        if not (0 <= x < rows and 0 <= y < cols):
+            return False
+
 
         visited.add((x,y))
         path.append((x,y))
@@ -97,18 +100,28 @@ if __name__ == "__main__":
 
     n = int(input("Taille du labyrinthe : "))
     algo = input("Générer labyrinthe (B = Backtracking, K = Kruskal) : ").upper()
+
+    # chrono génération
+    t0 = time.time()
     if algo == "B":
         maze = generate_maze_backtracking(n)
     else:
         maze = generate_maze_kruskal(n,n)
-    
+    t1 = time.time()
+    print(f"⏱️ Temps de génération ({algo}) : {t1 - t0:.4f} sec")
+
     ascii_maze = maze_to_ascii(maze)
 
     method = input("Résoudre avec (B = Backtracking, A = A*) : ").upper()
+
+    # chrono résolution
+    t2 = time.time()
     if method == "B":
         path, visited = solve_backtracking(maze)
     else:
         path, visited = a_star(maze)
+    t3 = time.time()
+    print(f"⏱️ Temps de résolution ({method}) : {t3 - t2:.4f} sec")
 
     print_maze_with_path(maze, path, visited)
 

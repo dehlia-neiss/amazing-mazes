@@ -1,4 +1,5 @@
 import random
+import time
 
 # ===================== BACKTRACKING =====================
 def generate_maze_backtracking(n):
@@ -39,7 +40,6 @@ class UnionFind:
         return False
 
 def generate_maze_kruskal(width, height):
-    # Grille avec murs = 1, passages = 0
     maze = [[1 for _ in range(width*2+1)] for _ in range(height*2+1)]
     
     def cell_id(x, y):
@@ -62,7 +62,6 @@ def generate_maze_kruskal(width, height):
             maze[y2*2+1][x2*2+1] = 0
             maze[(y1+y2)+1][(x1+x2)+1] = 0
     
-    # Entrée et sortie
     maze[1][0] = 0
     maze[height*2-1][width*2] = 0
     return maze
@@ -90,6 +89,8 @@ if __name__ == "__main__":
     n = int(input("Taille du labyrinthe (nombre de cellules) : "))
     algo = input("Choisir l'algorithme (B = Backtracking, K = Kruskal) : ").upper()
     
+    start_time = time.time()  # début chrono
+    
     if algo == "B":
         maze = generate_maze_backtracking(n)
     elif algo == "K":
@@ -98,5 +99,12 @@ if __name__ == "__main__":
         print("Choix invalide, génération Backtracking par défaut.")
         maze = generate_maze_backtracking(n)
     
-    ascii_maze = maze_to_ascii(maze)
-    print_maze(ascii_maze)
+    end_time = time.time()  # fin chrono
+    print(f"⏱ Temps d'exécution ({algo}) : {end_time - start_time:.4f} secondes")
+    
+    # Pour éviter d'afficher des millions de lignes, on n'affiche que si c'est petit
+    if n <= 50:
+        ascii_maze = maze_to_ascii(maze)
+        print_maze(ascii_maze)
+    else:
+        print("Labyrinthe trop grand pour être affiché.")
