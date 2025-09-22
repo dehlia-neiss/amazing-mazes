@@ -16,7 +16,7 @@ Nous avons implémenté et testé ces méthodes sur des labyrinthes de tailles v
 
 ### 🔨 Génération
 - **Kruskal** : basé sur les ensembles disjoints, il construit un labyrinthe par connexions progressives des cellules.  
-- **Backtracking (DFS récursif)** : explore de manière récursive pour creuser des chemins aléatoires, avec retour arrière lorsqu’aucune avancée n’est possible.
+- **Backtracking** : explore de manière récursive pour creuser des chemins aléatoires, avec retour arrière lorsqu’aucune avancée n’est possible.
 
 ### 🚪 Résolution
 - **DFS (Depth First Search)** : explore les chemins en profondeur, pas forcément optimal.  
