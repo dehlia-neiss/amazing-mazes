@@ -1,13 +1,14 @@
 import heapq
 import time
 import tracemalloc
+import sys
 
-# ===================== OUTILS FORMAT =====================
 WALL = "#"
 OPEN = "."
 
+# ===================== Conversion / Affichage =====================
 def maze_to_ascii(maze):
-    """Accepte 0/1 ou déjà ASCII; renvoie ASCII #/."""
+    """Accepte 0/1 ou déjà ASCII ; renvoie ASCII #/."""
     out = []
     for row in maze:
         new_row = []
@@ -23,7 +24,6 @@ def ascii_to_binary(ascii_maze):
     """'#' -> 1 (mur), '.' -> 0 (ouvert)"""
     return [[1 if ch == "#" else 0 for ch in row] for row in ascii_maze]
 
-# ===================== AFFICHAGE =====================
 def print_ascii(ascii_maze):
     for row in ascii_maze:
         print("".join(row))
@@ -42,92 +42,139 @@ def print_maze_with_path(ascii_maze, path, visited):
                 line.append(ch)
         print("".join(line))
 
-# ===================== SOLVEUR BACKTRACKING (DFS) =====================
-def solve_backtracking(maze01, start=(1, 0), end=None):
+def find_border_openings_binary(maze01):
+    """Détecte les ouvertures (valeur 0) sur la bordure d'une grille 0/1."""
     rows, cols = len(maze01), len(maze01[0])
-    if end is None:
-        end = (rows - 2, cols - 1)  # compatible avec nos générateurs
-    path = []
-    visited = set()
+    openings = []
+    for c in range(cols):
+        if maze01[0][c] == 0:
+            openings.append((0, c))
+        if maze01[rows - 1][c] == 0:
+            openings.append((rows - 1, c))
+    for r in range(1, rows - 1):
+        if maze01[r][0] == 0:
+            openings.append((r, 0))
+        if maze01[r][cols - 1] == 0:
+            openings.append((r, cols - 1))
+    # dédoublonnage
+    seen = set()
+    uniq = []
+    for rc in openings:
+        if rc not in seen:
+            seen.add(rc)
+            uniq.append(rc)
+    return uniq
 
-    def in_bounds(r, c): return 0 <= r < rows and 0 <= c < cols
-    def is_open(r, c): return maze01[r][c] == 0
+# ===================== Backtracking (itératif, sans récursion) =====================
+def solve_backtracking(maze01, start=None, end=None):
+    """
+    DFS itératif (pile) pour éviter RecursionError.
+    maze01: grille 0/1 (0 = libre, 1 = mur)
+    """
+    rows, cols = len(maze01), len(maze01[0])
 
-    dirs = [(-1,0),(0,1),(1,0),(0,-1)]  # haut, droite, bas, gauche
+    # Détection auto si start/end non fournis ou fermés
+    if start is None or end is None or not (0 <= start[0] < rows and 0 <= start[1] < cols) or not (0 <= end[0] < rows and 0 <= end[1] < cols) or maze01[start[0]][start[1]] == 1 or maze01[end[0]][end[1]] == 1:
+        openings = find_border_openings_binary(maze01)
+        if len(openings) >= 2:
+            start, end = openings[0], openings[1]
+        else:
+            # fallback aux positions classiques
+            start, end = (1, 0), (rows - 2, cols - 1)
 
-    def dfs(r, c):
+    stack = [start]
+    visited = {start}
+    parent = {}  # pour reconstruire le chemin
+    dirs = [(-1,0), (0,1), (1,0), (0,-1)]  # haut, droite, bas, gauche
+
+    while stack:
+        r, c = stack.pop()
         if (r, c) == end:
-            path.append((r, c))
-            return True
-        visited.add((r, c))
-        path.append((r, c))
-        for dr, dc in dirs:
-            nr, nc = r + dr, c + dc
-            if not in_bounds(nr, nc) or (nr, nc) in visited or not is_open(nr, nc):
-                continue
-            if dfs(nr, nc):
-                return True
-        path.pop()
-        return False
-
-    if not is_open(*start) or not is_open(*end):
-        return None, visited
-
-    ok = dfs(*start)
-    if not ok:
-        return None, visited
-    return path, visited
-
-# ===================== SOLVEUR A* (sans affichage intermédiaire) =====================
-def a_star(maze01, start=(1, 0), end=None):
-    rows, cols = len(maze01), len(maze01[0])
-    if end is None:
-        end = (rows - 2, cols - 1)
-
-    def h(a, b): return abs(a[0] - b[0]) + abs(a[1] - b[1])
-    dirs = [(-1,0),(1,0),(0,-1),(0,1)]
-
-    open_set = []
-    heapq.heappush(open_set, (h(start, end), 0, start))
-    came_from = {}
-    g_score = {start: 0}
-    visited = set()
-
-    while open_set:
-        _, gcur, cur = heapq.heappop(open_set)
-        if cur in visited:
-            continue
-        visited.add(cur)
-
-        if cur == end:
+            # reconstruire le chemin
             path = []
-            x = cur
-            while x in came_from:
+            x = end
+            while x != start:
                 path.append(x)
-                x = came_from[x]
+                x = parent[x]
             path.append(start)
             path.reverse()
             return path, visited
 
-        r, c = cur
         for dr, dc in dirs:
             nr, nc = r + dr, c + dc
-            if 0 <= nr < rows and 0 <= nc < cols and maze01[nr][nc] == 0:
-                tentative_g = gcur + 1
-                nb = (nr, nc)
-                if nb not in g_score or tentative_g < g_score[nb]:
-                    g_score[nb] = tentative_g
-                    f = tentative_g + h(nb, end)
-                    heapq.heappush(open_set, (f, tentative_g, nb))
-                    came_from[nb] = cur
+            nb = (nr, nc)
+            if 0 <= nr < rows and 0 <= nc < cols and maze01[nr][nc] == 0 and nb not in visited:
+                visited.add(nb)
+                parent[nb] = (r, c)
+                stack.append(nb)
 
     return None, visited
 
-# ===================== TEST / MAIN =====================
+# ===================== A* (implémentation originale, avec timer) =====================
+def a_star(maze01, start=None, end=None):
+    rows, cols = len(maze01), len(maze01[0])
+
+    if start is None or end is None or not (0 <= start[0] < rows and 0 <= start[1] < cols) or not (0 <= end[0] < rows and 0 <= end[1] < cols) or maze01[start[0]][start[1]] == 1 or maze01[end[0]][end[1]] == 1:
+        openings = find_border_openings_binary(maze01)
+        if len(openings) >= 2:
+            start, end = openings[0], openings[1]
+        else:
+            start, end = (1, 0), (rows - 2, cols - 1)
+
+    def heuristic(a,b):
+        return abs(a[0]-b[0]) + abs(a[1]-b[1])
+
+    directions = [(-1,0),(1,0),(0,-1),(0,1)]
+    open_set = []
+    heapq.heappush(open_set, (heuristic(start,end), 0, start))
+    came_from = {}
+    g_score = {start:0}
+    visited = set()
+    start_time = time.time()
+    step = 0
+
+    while open_set:
+        _, g, current = heapq.heappop(open_set)
+        if current in visited:
+            continue
+        visited.add(current)
+        step += 1
+
+        # Timer en direct toutes les 100 étapes (comportement original)
+        if step % 100 == 0:
+            elapsed = time.time() - start_time
+            sys.stdout.write(f"\rTemps écoulé (A*) : {elapsed:.2f}s")
+            sys.stdout.flush()
+
+        if current == end:
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.append(start)
+            path.reverse()
+            print()  # retour ligne après le timer
+            return path, visited
+
+        r, c = current
+        for dx, dy in directions:
+            nr, nc = r + dx, c + dy
+            if 0 <= nr < rows and 0 <= nc < cols and maze01[nr][nc] == 0:
+                neighbor = (nr, nc)
+                tentative_g = g + 1
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    g_score[neighbor] = tentative_g
+                    f_score = tentative_g + heuristic(neighbor,end)
+                    heapq.heappush(open_set, (f_score, tentative_g, neighbor))
+                    came_from[neighbor] = current
+
+    print()
+    return None, visited
+
+# ===================== Main =====================
 if __name__ == "__main__":
-    # Import local
-    from maze_build import generate_maze_backtracking, generate_maze_kruskal
-    from save import save_maze_to_file
+    from maze_build import generate_maze_backtracking, generate_maze_kruskal, maze_to_ascii as build_maze_to_ascii  # [[13]]
+    from save import save_maze_to_file  # [[11]]
 
     tracemalloc.start()
 
@@ -135,51 +182,55 @@ if __name__ == "__main__":
     n = int(input("Taille du labyrinthe : "))
     algo = input("Générer labyrinthe (B = Backtracking, K = Kruskal) : ").strip().upper() or "K"
 
-    t0 = time.time()
+    t_gen0 = time.time()
     if algo == "B":
-        maze = generate_maze_backtracking(n)     # ASCII #/.
+        maze = generate_maze_backtracking(n)   # peut renvoyer ASCII (#/.)
     else:
-        maze = generate_maze_kruskal(n, n)       # 0/1
-    t1 = time.time()
-    print(f"⏱️ Temps de génération ({algo}) : {t1 - t0:.4f} sec")
+        maze = generate_maze_kruskal(n, n)     # renvoie 0/1
+    t_gen1 = time.time()
 
-    # Convertir en ASCII et afficher une seule fois le labyrinthe généré
-    ascii_maze = maze_to_ascii(maze)
+    # Afficher le labyrinthe généré (ASCII) une seule fois
+    ascii_maze = build_maze_to_ascii(maze)
     print("\n=== Labyrinthe généré ===")
     print_ascii(ascii_maze)
 
     # --- Choix du solveur ---
     method = input("\nRésoudre avec (B = Backtracking, A = A*) : ").strip().upper() or "A"
 
-    # Toujours résoudre sur 0/1 pour éviter toute ambiguïté
+    # Résolution toujours sur 0/1
     maze01 = ascii_to_binary(ascii_maze)
 
     # --- Résolution ---
-    t2 = time.time()
+    t_res0 = time.time()
     if method == "B":
-        path, visited = solve_backtracking(maze01)
+        path, visited = solve_backtracking(maze01)   # itératif -> pas de RecursionError
     else:
-        path, visited = a_star(maze01)
-    t3 = time.time()
+        path, visited = a_star(maze01)               # A* original
+    t_res1 = time.time()
 
     if path is None:
         print("Aucun chemin trouvé (labyrinthe invalide ?).")
+        # Statistiques avant sortie
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"\n⏱️ Génération: {t_gen1 - t_gen0:.4f}s | Résolution: {t_res1 - t_res0:.4f}s")
+        print(f"💾 Mémoire: courant {current/1024:.2f} Ko | pic {peak/1024:.2f} Ko")
         tracemalloc.stop()
-        raise SystemExit
+        sys.exit(1)
 
-    # Affichage final: labyrinthe + chemin (o) + exploré (*)
+    # --- Affichage final: labyrinthe + chemin ---
     print("\n=== Labyrinthe résolu ===")
     print_maze_with_path(ascii_maze, path, visited)
-    print(f"\n⏱️ Temps de résolution ({method}) : {t3 - t2:.4f} sec")
 
-    # --- Mémoire ---
+    # --- Statistiques (juste avant la demande de sauvegarde) ---
     current, peak = tracemalloc.get_traced_memory()
-    print(f"💾 Mémoire utilisée : {current/1024:.2f} Ko ; pic : {peak/1024:.2f} Ko")
-    tracemalloc.stop()
+    print(f"\n⏱️ Génération: {t_gen1 - t_gen0:.4f}s | Résolution: {t_res1 - t_res0:.4f}s")
+    print(f"💾 Mémoire: courant {current/1024:.2f} Ko | pic {peak/1024:.2f} Ko")
 
-    # --- Sauvegarde ---
+    # --- Demande de sauvegarde (après affichage des stats) ---
     save = input("Voulez-vous sauvegarder le labyrinthe ? (O/N) : ").strip().upper()
     if save == "O":
         filename = input("Nom du fichier pour sauvegarder le labyrinthe : ").strip() or "maze"
-        # On sauvegarde la version ASCII avec overlays
+        # save_maze_to_file accepte 0/1 ou '#/.' et surimprime 'o' et '*' [[11]]
         save_maze_to_file(ascii_maze, path, visited, filename)
+
+    tracemalloc.stop()
